@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Environment and Secrets
+.env
+*.env.local
+
+# Databases & Vector Stores
+*.db
+*.sqlite3
+*.sqlite
+*.faiss
+*.pkl
+*.joblib
+
+# Large datasets & raw logs
+data/raw/
+*.tar.gz
+*.zip
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

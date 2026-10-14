@@ -1,0 +1,8 @@
+timestamp,username,source_ip,destination_ip,hostname,event_type,outcome,message
+2026-10-13 09:10:01,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:10:04,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:10:07,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:10:10,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:10:13,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:10:16,root,192.0.2.14,10.0.0.5,srv-auth-prod,failed_login,failure,Failed password for root from 192.0.2.14
+2026-10-13 09:12:00,sysadmin,10.0.0.99,10.0.0.5,srv-auth-prod,successful_login,success,Accepted publickey for sysadmin from 10.0.0.99

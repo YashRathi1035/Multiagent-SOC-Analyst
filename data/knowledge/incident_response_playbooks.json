@@ -1,0 +1,75 @@
+[
+  {
+    "playbook_id": "IR-PLAYBOOK-001",
+    "title": "SSH Brute-Force & Password Guessing Incident Response Playbook",
+    "category": "Credential Access",
+    "nist_phase": "Triage & Containment",
+    "summary": "Standard operating procedure for investigating and containing high-volume automated SSH authentication failure bursts.",
+    "investigation_steps": [
+      "1. Verify the originating IP address in external threat intelligence databases (AbuseIPDB, VirusTotal).",
+      "2. Calculate failure rate and total duration of the authentication burst.",
+      "3. Inspect whether any targeted accounts are valid local users versus non-existent accounts.",
+      "4. Verify whether any authentication attempt from the attacker IP resulted in a successful session (Accepted password/publickey).",
+      "5. Inspect other hosts in the enterprise network to determine if the same source IP is targeting other exposed services."
+    ],
+    "containment_actions": [
+      "1. Implement temporary or permanent drop rule for originating IP on perimeter firewall (iptables / AWS Security Group).",
+      "2. Ensure fail2ban or dynamic rate-limiting service is functioning on the targeted host.",
+      "3. If legitimate accounts were targeted, notify account owners and review recent activity."
+    ],
+    "remediation_actions": [
+      "1. Disable password-based SSH authentication in /etc/ssh/sshd_config (PasswordAuthentication no).",
+      "2. Require SSH keys with passphrase protection and hardware tokens (FIDO2).",
+      "3. Restrict SSH access to authorized VPN gateways or bastion jump hosts."
+    ],
+    "references": "NIST Special Publication 800-61 Revision 2: Computer Security Incident Handling Guide, Section 3.2"
+  },
+  {
+    "playbook_id": "IR-PLAYBOOK-002",
+    "title": "Compromised Valid Account & Unauthorized Access Playbook",
+    "category": "Initial Access / Privilege Escalation",
+    "nist_phase": "Eradication & Recovery",
+    "summary": "Emergency playbook for situations where repeated authentication failures precede an accepted login session.",
+    "investigation_steps": [
+      "1. Immediately isolate the affected host from the internal network while preserving volatile memory (RAM).",
+      "2. Determine exact timestamp of the successful login (pam_unix session opened).",
+      "3. Audit all commands executed during the session via shell history (.bash_history), auditd logs, or process creation events.",
+      "4. Check for persistence mechanisms added during session: new cron jobs, modified ~/.ssh/authorized_keys, new sudoers entries, or newly created accounts.",
+      "5. Identify any outbound network connections initiated by the user session (potential reverse shells or data staging)."
+    ],
+    "containment_actions": [
+      "1. Terminate all active SSH sessions and processes belonging to the compromised user account.",
+      "2. Lock the user account immediately (usermod -L <username>).",
+      "3. Revoke all active session tokens, Kerberos tickets, and SSH authorized keys for the account."
+    ],
+    "remediation_actions": [
+      "1. Force credential reset and re-enrollment of Multi-Factor Authentication (MFA).",
+      "2. Re-image or restore the compromised host from a known clean backup if root privileges were attained.",
+      "3. Audit surrounding systems accessible with the compromised credentials."
+    ],
+    "references": "NIST Special Publication 800-61 Revision 2, Section 3.3 (Containment, Eradication, and Recovery)"
+  },
+  {
+    "playbook_id": "IR-PLAYBOOK-003",
+    "title": "User Enumeration & Account Reconnaissance Playbook",
+    "category": "Discovery",
+    "nist_phase": "Triage & Hardening",
+    "summary": "Guidance for assessing and countering systematic account discovery across identity directories.",
+    "investigation_steps": [
+      "1. Collate the full list of distinct usernames tested by the remote host.",
+      "2. Cross-reference tested usernames against valid organizational employee and service account directories.",
+      "3. Determine if the adversary obtained an internal username list (e.g., from public LinkedIn scraping or prior breaches).",
+      "4. Assess whether the attacker switched to password spraying against the identified valid accounts."
+    ],
+    "containment_actions": [
+      "1. Block or rate-limit the probing IP address.",
+      "2. Alert SOC monitoring team to flag future logins for any of the discovered valid usernames.",
+      "3. Verify that public login endpoints return generic error messages (e.g. 'Invalid credentials') that do not disclose whether a username exists."
+    ],
+    "remediation_actions": [
+      "1. Remove default accounts (guest, test, demo, oracle) from systems.",
+      "2. Implement network access control lists (ACLs) to hide administrative interfaces from public internet exposure."
+    ],
+    "references": "MITRE D3FEND: D3-BAA (Biometric Authentication), D3-UD (User Account Disabling)"
+  }
+]

@@ -1,0 +1,15 @@
+Dec 10 06:55:40 combo sshd[24200]: Failed password for invalid user admin from 187.141.143.180 port 48310 ssh2
+Dec 10 06:55:42 combo sshd[24202]: Failed password for invalid user guest from 187.141.143.180 port 48311 ssh2
+Dec 10 06:55:44 combo sshd[24204]: Failed password for invalid user oracle from 187.141.143.180 port 48312 ssh2
+Dec 10 06:55:46 combo sshd[24206]: Failed password for root from 187.141.143.180 port 48313 ssh2
+Dec 10 06:55:48 combo sshd[24208]: Failed password for root from 187.141.143.180 port 48314 ssh2
+Dec 10 06:55:50 combo sshd[24210]: Failed password for root from 187.141.143.180 port 48315 ssh2
+Dec 10 06:55:52 combo sshd[24212]: Failed password for root from 187.141.143.180 port 48316 ssh2
+Dec 10 06:55:55 combo sshd[24215]: Connection closed by 187.141.143.180 [preauth]
+Dec 10 07:02:10 combo sshd[24230]: Failed password for analyst from 203.0.113.45 port 51100 ssh2
+Dec 10 07:02:25 combo sshd[24232]: Failed password for analyst from 203.0.113.45 port 51102 ssh2
+Dec 10 07:03:01 combo sshd[24235]: Accepted password for analyst from 203.0.113.45 port 51105 ssh2
+Dec 10 07:03:01 combo sshd[24236]: pam_unix(sshd:session): session opened for user analyst by (uid=1001)
+Dec 10 07:15:20 combo sshd[24250]: Accepted publickey for fztu from 10.0.0.15 port 52200 ssh2
+Dec 10 07:15:20 combo sshd[24251]: pam_unix(sshd:session): session opened for user fztu by (uid=1002)
+Dec 10 07:45:10 combo sshd[24280]: Disconnected from 10.0.0.15 port 52200

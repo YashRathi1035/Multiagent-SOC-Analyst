@@ -1,0 +1,28 @@
+# Core application
+streamlit
+pandas
+pydantic
+python-dotenv
+
+# Multi-agent orchestration and local LLM
+langgraph
+langchain-core
+langchain-ollama
+
+# Retrieval-Augmented Generation
+sentence-transformers
+faiss-cpu
+
+# Machine Learning
+scikit-learn
+joblib
+
+# Database and API
+sqlalchemy
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Testing
+pytest
+httpx

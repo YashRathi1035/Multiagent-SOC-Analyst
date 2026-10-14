@@ -1,0 +1,9 @@
+[
+  {"timestamp": "2026-10-13T08:00:10Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:00:15Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:00:20Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:00:25Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:00:30Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:00:35Z", "username": "admin", "source_ip": "198.51.100.22", "event_type": "failed_login", "outcome": "failure", "message": "Failed password for admin", "hostname": "srv-bastion-01"},
+  {"timestamp": "2026-10-13T08:05:00Z", "username": "deployer", "source_ip": "10.0.1.50", "event_type": "successful_login", "outcome": "success", "message": "Accepted publickey for deployer", "hostname": "srv-bastion-01"}
+]

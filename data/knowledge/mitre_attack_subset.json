@@ -1,0 +1,74 @@
+[
+  {
+    "technique_id": "T1110",
+    "name": "Brute Force",
+    "tactics": ["Credential Access"],
+    "description": "Adversaries may use brute force techniques to attempt to gain access to accounts when passwords are unknown or when password hashes are obtained. Without knowledge of the password for an account or set of accounts, an adversary may systematically guess the password using a repetitive or automated process.",
+    "detection_guidance": "Monitor authentication logs for repeated failed login attempts from a single source IP or targeting specific accounts within a short time window. Correlate with event sources like /var/log/auth.log, Linux auditd, Windows Security Event ID 4625, and VPN gateway logs.",
+    "mitigation": "Implement multi-factor authentication (MFA) across all remote access services. Enforce rate limiting and automated IP banning (e.g., fail2ban) after consecutive authentication failures. Enforce account lockout thresholds.",
+    "url": "https://attack.mitre.org/techniques/T1110/"
+  },
+  {
+    "technique_id": "T1110.001",
+    "name": "Password Guessing",
+    "tactics": ["Credential Access"],
+    "description": "Adversaries may guess passwords to gain access to accounts. Password guessing attempts systematically cycle through common or default passwords against targeted known accounts, such as administrator, root, oracle, or test. This attack typically generates multiple failed authentication events on a single or small set of accounts.",
+    "detection_guidance": "In OpenSSH logs, look for repeated 'Failed password for root' or 'Failed password for invalid user' log messages originating from external IP addresses. A sudden spike in failed authentication volume followed by a successful login indicates potential compromise.",
+    "mitigation": "Disable direct root login over SSH (PermitRootLogin no). Enforce strong password complexity requirements. Require cryptographic key-based authentication and disable password-based SSH access entirely.",
+    "url": "https://attack.mitre.org/techniques/T1110/001/"
+  },
+  {
+    "technique_id": "T1110.003",
+    "name": "Password Spraying",
+    "tactics": ["Credential Access"],
+    "description": "Adversaries may use password spraying to attempt a single or small set of common passwords across a large number of distinct user accounts to avoid account lockouts. This technique avoids triggering traditional brute-force detection rules that look for repeated failures on a single user.",
+    "detection_guidance": "Monitor for single source IP addresses or clusters of distributed IPs attempting logins across multiple distinct usernames in quick succession. Look for high ratios of unique usernames per source IP address in authentication telemetry.",
+    "mitigation": "Deploy CAPTCHA or proof-of-work challenges on public authentication endpoints. Implement continuous anomaly detection monitoring authentication velocity across the entire directory service.",
+    "url": "https://attack.mitre.org/techniques/T1110/003/"
+  },
+  {
+    "technique_id": "T1078",
+    "name": "Valid Accounts",
+    "tactics": ["Defense Evasion", "Persistence", "Privilege Escalation", "Initial Access"],
+    "description": "Adversaries may obtain and abuse credentials of existing, legitimate accounts as a means of gaining Initial Access, Persistence, Privilege Escalation, or Defense Evasion. Compromised credentials can be obtained through brute-force attacks, credential dumping, or purchasing credentials on dark web forums.",
+    "detection_guidance": "Investigate authentication sequences where multiple failed attempts are followed by a successful login. Analyze anomalous login locations, unexpected time-of-day logins, unusual user-agent strings, and concurrent active sessions for the same user.",
+    "mitigation": "Enforce conditional access policies that restrict logins based on geographic anomaly or device compliance. Require hardware security keys or FIDO2 MFA. Audit account usage and immediately revoke credentials upon detection of compromise.",
+    "url": "https://attack.mitre.org/techniques/T1078/"
+  },
+  {
+    "technique_id": "T1087.001",
+    "name": "Account Discovery: Local Accounts",
+    "tactics": ["Discovery"],
+    "description": "Adversaries may attempt to obtain a listing of local system accounts to understand what users exist on the host and identify high-privilege administrative accounts for subsequent targeting.",
+    "detection_guidance": "Look for authentication logs attempting to connect using non-existent usernames ('invalid user' messages in sshd). On endpoints, monitor execution of commands such as 'cat /etc/passwd', 'getent passwd', 'net user', or 'whoami'.",
+    "mitigation": "Restrict read access to sensitive user configuration files where possible. Limit verbose error messages on public login banners that reveal whether a username is valid or invalid.",
+    "url": "https://attack.mitre.org/techniques/T1087/001/"
+  },
+  {
+    "technique_id": "T1021.004",
+    "name": "Remote Services: SSH",
+    "tactics": ["Lateral Movement"],
+    "description": "Adversaries may log in into remote machines using Secure Shell (SSH) with valid credentials or stolen SSH private keys. Once authenticated, adversaries can execute remote commands, pivot to internal networks, and establish persistent reverse tunnels.",
+    "detection_guidance": "Audit SSH session openings (pam_unix session opened) and correlate with known administrative jumpboxes. Flag direct SSH connections originating from unexpected external IP subnets or non-standard client software.",
+    "mitigation": "Restrict SSH ingress at perimeter firewalls to authorized VPN or bastion hosts. Restrict SSH listening ports or bind sshd strictly to private management interfaces. Enforce SSH host key verification.",
+    "url": "https://attack.mitre.org/techniques/T1021/004/"
+  },
+  {
+    "technique_id": "T1059",
+    "name": "Command and Scripting Interpreter",
+    "tactics": ["Execution"],
+    "description": "Adversaries may abuse command and script interpreters (such as Bash, sh, Python, PowerShell) to execute arbitrary commands, download secondary payloads, and automate intrusion workflows.",
+    "detection_guidance": "Monitor process creation events (auditd Syscall 59 / Windows 4688) for interactive shells spawned directly by sshd or web server worker processes. Look for suspicious command lines involving curl, wget, base64 decoding, or reverse shell syntax.",
+    "mitigation": "Enforce application allowlisting. Restrict non-administrative users from executing administrative shells. Enable script block logging and auditd process tracing.",
+    "url": "https://attack.mitre.org/techniques/T1059/"
+  },
+  {
+    "technique_id": "T1496",
+    "name": "Resource Hijacking",
+    "tactics": ["Impact"],
+    "description": "Adversaries may leverage the resources of co-opted systems in order to solve resource-intensive problems, most commonly unauthorized cryptocurrency mining (cryptojacking).",
+    "detection_guidance": "Observe sustained 100% CPU utilization across all cores, outbound network connections to known mining pool endpoints (stratum+tcp), and process names imitating legitimate daemons (e.g., kworker, systemd-udev).",
+    "mitigation": "Set resource quotas (cgroups) for unprivileged service accounts. Block outbound traffic to known cryptocurrency mining domain lists and pool ports.",
+    "url": "https://attack.mitre.org/techniques/T1496/"
+  }
+]
