@@ -24,10 +24,10 @@ from detection.rules import DetectionEngine
 from agents.llm_client import MockLLMClient, OllamaLLMClient, get_llm_client
 from rag.retrieve import RAGRetriever
 from reports.generator import (
-    InvestigationGenerator,
     export_report_to_json,
     export_report_to_markdown,
 )
+from graph.workflow import run_investigation, stream_investigation
 
 # Page configuration
 st.set_page_config(
@@ -160,6 +160,8 @@ if "report" not in st.session_state:
     st.session_state.report = None
 if "warnings" not in st.session_state:
     st.session_state.warnings = []
+if "soc_state" not in st.session_state:
+    st.session_state.soc_state = None  # full LangGraph SOCState from last run
 
 
 # Check Ollama Status
@@ -185,7 +187,7 @@ st.markdown(
                 {'● Ollama Online (' + settings.OLLAMA_MODEL + ')' if ollama_online else '▲ Mock LLM Mode'}
             </span>
             <div style="font-size: 0.8rem; color: #38bdf8; margin-top: 5px; font-weight: 600;">
-                Phase 3: Threat Intelligence & RAG Active (Enrichment + FAISS)
+                Phase 4: LangGraph Multi-Agent Pipeline Active (6 Nodes)
             </div>
         </div>
     </div>
@@ -444,15 +446,19 @@ with tab2:
 
                     c_act1, c_act2 = st.columns([1, 4])
                     with c_act1:
-                        if st.button(f"⚡ Investigate with AI", key=f"inv_btn_{alert.alert_id}"):
+                        if st.button(f"⚡ Multi-Agent Investigate", key=f"inv_btn_{alert.alert_id}"):
                             st.session_state.selected_alert = alert
-                            # Trigger investigation with RAG
-                            with st.spinner(f"Retrieving MITRE guidance and analyzing {alert.alert_id} with AI Analyst..."):
-                                client = get_llm_client(force_mock=use_mock)
-                                gen = InvestigationGenerator(llm_client=client)
-                                report = gen.investigate_alert(alert, st.session_state.events)
-                                st.session_state.report = report
-                            st.success(f"Investigation completed for {alert.alert_id}!")
+                            with st.spinner("🤖 Running 6-node LangGraph pipeline (Log → Threat Intel → RAG → Correlation → Report)..."):
+                                final_state = run_investigation(
+                                    normalized_events=st.session_state.events,
+                                    alerts=[alert],
+                                )
+                                st.session_state.soc_state = final_state
+                                st.session_state.report = final_state.get("final_report")
+                            if st.session_state.report:
+                                st.success(f"✅ Investigation complete — Case {final_state.get('case_id')}")
+                            else:
+                                st.error("❌ Investigation failed to generate a report.")
                             st.rerun()
                     with c_act2:
                         with st.expander(f"Inspect Supporting Event IDs ({len(alert.triggering_event_ids)})"):
@@ -588,8 +594,88 @@ with tab3:
 
         st.markdown("---")
 
+        # ── Agent Execution Trace Panel ──────────────────────────────────────
+        if st.session_state.soc_state is not None:
+            soc_st = st.session_state.soc_state
+            trace_lines = soc_st.get("agent_trace", [])
+            st.markdown("### 🤖 Multi-Agent Execution Trace (LangGraph Pipeline)")
+            st.caption("Audit trail showing each agent node's execution status and key findings:")
+
+            NODES = [
+                ("orchestrator", "🎯 Orchestrator", "Alert prioritization & case init"),
+                ("log_agent", "📋 Log Agent", "Auth timeline & IOC extraction"),
+                ("threat_intel_node", "🌐 Threat Intel", "External reputation enrichment"),
+                ("knowledge_agent", "📚 Knowledge Agent", "MITRE ATT&CK RAG retrieval"),
+                ("correlation_agent", "🔗 Correlation", "MITRE mapping & timeline"),
+                ("report_agent", "📝 Report Agent", "LLM final report synthesis"),
+            ]
+            trace_str = " ".join(trace_lines).lower()
+
+            node_cols = st.columns(3)
+            for i, (node_id, node_label, node_desc) in enumerate(NODES):
+                executed = node_id in trace_str
+                failed = f"[{node_id}] failed" in trace_str
+                skipped = f"[{node_id}] skipped" in trace_str
+
+                if failed:
+                    icon, color, status = "❌", "#ef4444", "FAILED"
+                elif skipped:
+                    icon, color, status = "⏭️", "#f59e0b", "SKIPPED"
+                elif executed:
+                    icon, color, status = "✅", "#22c55e", "COMPLETED"
+                else:
+                    icon, color, status = "⏳", "#64748b", "PENDING"
+
+                with node_cols[i % 3]:
+                    st.markdown(
+                        f"""<div style="background:#1e293b; border:1px solid {color}33;
+                                border-left:4px solid {color}; border-radius:8px;
+                                padding:10px; margin-bottom:8px;">
+                            <div style="font-size:0.72rem; color:{color}; font-weight:700;">{icon} {status}</div>
+                            <div style="font-weight:600; color:#e2e8f0; font-size:0.9rem; margin:3px 0 2px 0;">{node_label}</div>
+                            <div style="font-size:0.78rem; color:#94a3b8;">{node_desc}</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+            with st.expander("📋 Full Agent Trace Log", expanded=False):
+                for line in trace_lines:
+                    color = "#ef4444" if "failed" in line.lower() else ("#f59e0b" if "skipped" in line.lower() else "#22c55e")
+                    st.markdown(f'<span style="color:{color}; font-family:monospace; font-size:0.83rem;">▶ {line}</span>', unsafe_allow_html=True)
+
+            corr = soc_st.get("correlation_summary", "")
+            if corr:
+                with st.expander("🔗 Correlation Agent Summary"):
+                    st.info(corr)
+
+            timeline = soc_st.get("timeline", [])
+            if timeline:
+                with st.expander(f"⏱️ Forensic Timeline ({len(timeline)} entries)"):
+                    tl_data = [
+                        {
+                            "Timestamp": e.get("timestamp", "")[:19],
+                            "Event ID": e.get("event_id", ""),
+                            "Actor IP": e.get("actor_ip", ""),
+                            "Username": e.get("username", ""),
+                            "Action": e.get("action", ""),
+                            "Outcome": e.get("outcome", "").upper(),
+                            "🔴": "●" if e.get("is_triggering") else "",
+                        }
+                        for e in timeline
+                    ]
+                    st.dataframe(pd.DataFrame(tl_data), use_container_width=True, height=280)
+
+            errors = soc_st.get("errors", [])
+            if errors:
+                with st.expander(f"⚠️ Pipeline Errors ({len(errors)})", expanded=True):
+                    for err in errors:
+                        st.error(err)
+
+        st.markdown("---")
+
         # Human Review & Export Section
         st.markdown("### ✍️ Analyst Review & Sign-Off")
+
         r_col1, r_col2 = st.columns([2, 2])
         with r_col1:
             new_status = st.selectbox(
@@ -624,7 +710,17 @@ with tab3:
                 )
 
     else:
-        st.info("No investigation run yet. Go to **Tab 2 (Detection Engine & Alerts)** and click **⚡ Investigate with AI** on any detected alert.")
+        if st.session_state.soc_state is not None:
+            soc_st = st.session_state.soc_state
+            trace_lines = soc_st.get("agent_trace", [])
+            if trace_lines:
+                st.markdown("### 🤖 Agent Execution Trace")
+                for line in trace_lines:
+                    color = "#ef4444" if "failed" in line.lower() else "#94a3b8"
+                    st.markdown(f'<span style="color:{color}; font-family:monospace; font-size:0.85rem;">▶ {line}</span>', unsafe_allow_html=True)
+        else:
+            st.info("No investigation run yet. Go to **Tab 2 (Detection Engine & Alerts)** and click **⚡ Multi-Agent Investigate** on any detected alert.")
+
 
 # ==========================================
 # TAB 4: Knowledge Base & Threat Intel Tools
