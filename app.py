@@ -29,6 +29,7 @@ from reports.generator import (
 )
 from graph.workflow import run_investigation, stream_investigation
 from ml.detector import MLDetector
+from storage.database import get_db
 
 # Page configuration
 st.set_page_config(
@@ -286,11 +287,12 @@ with st.sidebar:
         st.rerun()
 
 # Main Workspace Tabs
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📥 Ingestion & Telemetry",
     "🚨 Detection Engine & Alerts",
-    "🤖 AI Investigation & Report",
+    "🤖 Multi-Agent Investigation",
     "📚 Knowledge Base Search (RAG)",
+    "📁 Incident Case Management",
 ])
 
 # ==========================================
@@ -722,7 +724,11 @@ with tab3:
             )
             if new_status != rep.analyst_review_status.value:
                 rep.analyst_review_status = ReviewStatus(new_status)
-                st.success(f"Review status updated to {new_status}!")
+                try:
+                    get_db().update_case_status(rep.case_id, rep.analyst_review_status)
+                except Exception:
+                    pass
+                st.success(f"Review status updated to {new_status} and saved to database!")
 
         with r_col2:
             st.markdown("**Export Case Report**")
@@ -839,3 +845,195 @@ with tab4:
             )
             if ti_res.source_url:
                 st.markdown(f"[View Provider Intelligence Report]({ti_res.source_url})")
+
+# ==========================================
+# TAB 5: Incident Case Management (Phase 6)
+# ==========================================
+with tab5:
+    st.subheader("📁 Incident Case Management & Historical Persistence")
+    st.caption("SQLite persistent repository of all AI-investigated cases, forensic reports, and human analyst sign-offs.")
+
+    db = get_db()
+    metrics = db.get_metrics()
+
+    # Metrics row
+    c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+    with c_m1:
+        st.markdown(
+            f'<div class="soc-metric-card"><div class="metric-title">Total Cases</div><div class="metric-value">{metrics["total_cases"]}</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c_m2:
+        st.markdown(
+            f'<div class="soc-metric-card"><div class="metric-title">Pending Review</div><div class="metric-value" style="color: #eab308;">{metrics["pending_cases"]}</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c_m3:
+        st.markdown(
+            f'<div class="soc-metric-card"><div class="metric-title">Escalated Incidents</div><div class="metric-value" style="color: #ef4444;">{metrics["escalated_cases"]}</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c_m4:
+        st.markdown(
+            f'<div class="soc-metric-card"><div class="metric-title">False Positive Rate</div><div class="metric-value" style="color: #38bdf8;">{metrics["false_positive_rate"]}%</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Filters
+    f_col1, f_col2, f_col3 = st.columns([1, 1, 2])
+    with f_col1:
+        filter_sev = st.selectbox(
+            "Filter by Severity",
+            ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"],
+            index=0,
+            key="case_sev_filter",
+        )
+    with f_col2:
+        filter_stat = st.selectbox(
+            "Filter by Status",
+            ["ALL", "PENDING", "APPROVED", "ESCALATED", "FALSE_POSITIVE"],
+            index=0,
+            key="case_stat_filter",
+        )
+    with f_col3:
+        search_kw = st.text_input("Search Case ID, IP, or User", "", key="case_search_kw")
+
+    cases = db.list_cases(severity=filter_sev, status=filter_stat)
+    if search_kw:
+        skw = search_kw.lower().strip()
+        cases = [
+            c for c in cases
+            if skw in c.case_id.lower()
+            or skw in (c.source_ip or "").lower()
+            or skw in (c.affected_user or "").lower()
+            or skw in c.title.lower()
+        ]
+
+    if cases:
+        # Case summary dataframe
+        df_cases = pd.DataFrame([c.to_dict() for c in cases])
+        cols_display = [
+            "case_id", "created_at", "title", "severity", "status",
+            "source_ip", "affected_user", "confidence_score", "event_count"
+        ]
+        cols_display = [col for col in cols_display if col in df_cases.columns]
+        st.dataframe(df_cases[cols_display], use_container_width=True, height=220)
+
+        st.markdown("---")
+        st.markdown("### 🔍 Case Inspector & Analyst Sign-off")
+
+        case_options = {c.case_id: f"{c.case_id} — {c.title} ({c.severity} | {c.status})" for c in cases}
+        selected_cid = st.selectbox(
+            "Select Case to Review or Modify",
+            list(case_options.keys()),
+            format_func=lambda cid: case_options[cid],
+            key="selected_case_inspect",
+        )
+
+        selected_rec = next((c for c in cases if c.case_id == selected_cid), None)
+        if selected_rec:
+            badge_cls = f"badge-{selected_rec.severity.lower()}"
+            st.markdown(
+                f"""
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span class="{badge_cls}">{selected_rec.severity}</span>
+                        <span style="background: #334155; color: #94a3b8; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-left: 8px;">
+                            STATUS: {selected_rec.status}
+                        </span>
+                        <h3 style="margin: 8px 0 4px 0; color: #f8fafc;">{selected_rec.title}</h3>
+                    </div>
+                    <div style="text-align: right; color: #94a3b8; font-size: 0.85rem;">
+                        <strong>Created:</strong> {selected_rec.created_at.strftime('%Y-%m-%d %H:%M:%S') if selected_rec.created_at else 'N/A'}<br>
+                        <strong>Confidence:</strong> <span style="color: #22c55e; font-weight: 700;">{int(selected_rec.confidence_score * 100)}%</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.88rem; color: #94a3b8; margin-top: 8px;">
+                    <strong>Case ID:</strong> <code>{selected_rec.case_id}</code> | 
+                    <strong>Alert ID:</strong> <code>{selected_rec.alert_id}</code> | 
+                    <strong>Origin IP:</strong> <code>{selected_rec.source_ip}</code> | 
+                    <strong>Target User:</strong> <code>{selected_rec.affected_user}</code> | 
+                    <strong>Events:</strong> {selected_rec.event_count}
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            # Analyst Human-in-the-Loop Actions
+            c_h1, c_h2 = st.columns([1, 1])
+            with c_h1:
+                st.markdown("#### ✍️ Update Review Status")
+                status_opts = [s.value for s in ReviewStatus]
+                curr_idx = status_opts.index(selected_rec.status) if selected_rec.status in status_opts else 0
+                updated_status = st.selectbox(
+                    "Review Status",
+                    status_opts,
+                    index=curr_idx,
+                    key=f"status_select_{selected_rec.case_id}",
+                )
+                analyst_note_input = st.text_area(
+                    "Analyst Findings & Remediation Notes",
+                    value=selected_rec.analyst_notes or "",
+                    height=100,
+                    key=f"notes_input_{selected_rec.case_id}",
+                )
+                if st.button("💾 Save Status & Notes", key=f"save_btn_{selected_rec.case_id}"):
+                    db.update_case_status(
+                        case_id=selected_rec.case_id,
+                        status=ReviewStatus(updated_status),
+                        notes=analyst_note_input.strip(),
+                    )
+                    st.success(f"Case {selected_rec.case_id} updated to {updated_status}!")
+                    st.rerun()
+
+            with c_h2:
+                st.markdown("#### ⚡ Case Actions")
+                cached_report = selected_rec.get_report()
+                if cached_report:
+                    if st.button("📂 Load into Active Session (View in Tab 3)", key=f"load_active_{selected_rec.case_id}", use_container_width=True):
+                        st.session_state.report = cached_report
+                        st.success(f"Loaded Case {selected_rec.case_id} into Tab 3!")
+                        st.rerun()
+
+                    md_data = export_report_to_markdown(cached_report)
+                    st.download_button(
+                        label="📄 Download Markdown Report",
+                        data=md_data,
+                        file_name=f"{selected_rec.case_id}_report.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        key=f"dl_md_{selected_rec.case_id}",
+                    )
+
+                    js_data = export_report_to_json(cached_report)
+                    st.download_button(
+                        label="💾 Download JSON Report",
+                        data=js_data,
+                        file_name=f"{selected_rec.case_id}_report.json",
+                        mime="application/json",
+                        use_container_width=True,
+                        key=f"dl_js_{selected_rec.case_id}",
+                    )
+
+                if st.button("🗑️ Delete Case", type="secondary", key=f"del_btn_{selected_rec.case_id}", use_container_width=True):
+                    db.delete_case(selected_rec.case_id)
+                    st.warning(f"Deleted Case {selected_rec.case_id}")
+                    st.rerun()
+
+            # Display Stored Executive Summary
+            cached_report = selected_rec.get_report()
+            if cached_report:
+                with st.expander("📄 Stored Executive Summary & Findings", expanded=True):
+                    st.markdown(f"**Incident Summary:** {cached_report.summary}")
+                    st.markdown("**Observed Facts:**")
+                    for fact in cached_report.observed_facts:
+                        st.markdown(f"- ✅ {fact}")
+                    st.markdown("**Recommended Actions:**")
+                    for act in cached_report.recommended_actions:
+                        st.markdown(f"- 🛡️ {act}")
+    else:
+        st.info("No cases currently recorded in SQLite database. Run an investigation from Tab 2 or Tab 3 to automatically record cases.")

@@ -147,6 +147,20 @@ def run_investigation(
             "generated" if final_state.get("final_report") else "FAILED",
             len(final_state.get("errors", [])),
         )
+
+        # Auto-persist to SQLite case management store
+        if final_state.get("final_report") and final_state.get("case_id"):
+            try:
+                from storage.database import get_db
+                get_db().save_case(
+                    case_id=final_state["case_id"],
+                    report=final_state["final_report"],
+                    raw_filename=raw_filename,
+                    state=final_state,
+                )
+            except Exception as save_err:
+                logger.warning("Failed to auto-save case %s: %s", final_state.get("case_id"), save_err)
+
         return final_state
     except Exception as exc:
         logger.exception("Workflow execution failed: %s", exc)
