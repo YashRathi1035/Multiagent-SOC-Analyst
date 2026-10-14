@@ -65,6 +65,8 @@ class Orchestrator:
             "RULE-AUTH-002": 0,  # Credential compromise (highest risk)
             "RULE-AUTH-001": 1,  # Brute force
             "RULE-AUTH-003": 2,  # User enumeration
+            "RULE-ML-002": 3,    # ML Supervised Attack Classification
+            "RULE-ML-001": 4,    # ML Unsupervised Anomaly Detection
         }
 
         def sort_key(a: DetectionAlert):

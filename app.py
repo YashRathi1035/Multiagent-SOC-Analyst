@@ -28,6 +28,7 @@ from reports.generator import (
     export_report_to_markdown,
 )
 from graph.workflow import run_investigation, stream_investigation
+from ml.detector import MLDetector
 
 # Page configuration
 st.set_page_config(
@@ -223,6 +224,14 @@ with st.sidebar:
     )
 
     st.markdown("---")
+    st.subheader("🤖 Machine Learning")
+    enable_ml = st.checkbox(
+        "Enable ML Detection",
+        value=True,
+        help="Run Isolation Forest (unsupervised) and Random Forest (supervised) alongside deterministic rules.",
+    )
+
+    st.markdown("---")
     st.subheader("📁 Quick Load Samples")
     sample_dir = Path(settings.SAMPLES_DIR)
 
@@ -242,7 +251,7 @@ with st.sidebar:
                     brute_force_window_minutes=window_minutes,
                     user_enumeration_threshold=user_enum_th,
                 )
-                st.session_state.alerts = eng.run_all_rules(evts)
+                st.session_state.alerts = eng.run_all_rules(evts, include_ml=enable_ml)
                 st.session_state.selected_alert = st.session_state.alerts[0] if st.session_state.alerts else None
                 st.session_state.report = None
                 st.success(f"Loaded {len(evts)} OpenSSH events!")
@@ -262,7 +271,7 @@ with st.sidebar:
                     brute_force_window_minutes=window_minutes,
                     user_enumeration_threshold=user_enum_th,
                 )
-                st.session_state.alerts = eng.run_all_rules(evts)
+                st.session_state.alerts = eng.run_all_rules(evts, include_ml=enable_ml)
                 st.session_state.selected_alert = st.session_state.alerts[0] if st.session_state.alerts else None
                 st.session_state.report = None
                 st.success(f"Loaded {len(evts)} JSON events!")
@@ -319,7 +328,7 @@ with tab1:
                 brute_force_window_minutes=window_minutes,
                 user_enumeration_threshold=user_enum_th,
             )
-            st.session_state.alerts = eng.run_all_rules(evts)
+            st.session_state.alerts = eng.run_all_rules(evts, include_ml=enable_ml)
             st.session_state.selected_alert = st.session_state.alerts[0] if st.session_state.alerts else None
             st.session_state.report = None
             st.success(f"Successfully normalized {len(evts)} events from {uploaded_file.name}!")
@@ -465,6 +474,34 @@ with tab2:
                             st.code(", ".join(alert.triggering_event_ids), language="text")
         else:
             st.success("No suspicious patterns or rule violations detected in the loaded dataset.")
+
+        # Machine Learning Behavioral Profiling
+        if enable_ml:
+            st.markdown("---")
+            st.subheader("🤖 Machine Learning Behavioral Assessment")
+            st.caption(
+                "Unsupervised Isolation Forest (outlier detection) + Supervised Random Forest (attack classification)"
+            )
+            try:
+                ml_detector = MLDetector()
+                ml_evals = ml_detector.analyze_events(st.session_state.events)
+                if ml_evals:
+                    ml_records = []
+                    for ev in ml_evals:
+                        status_str = "🚨 ANOMALOUS" if ev.is_anomaly else "✅ NORMAL"
+                        ml_records.append({
+                            "Entity (IP / Host)": ev.entity,
+                            "Status": status_str,
+                            "Anomaly Score (0-1)": f"{ev.anomaly_score:.3f}",
+                            "Predicted Profile": ev.predicted_class.replace("_", " ").title(),
+                            "Confidence": f"{int(ev.confidence * 100)}%",
+                            "Algorithm": ev.algorithm,
+                            "Key Indicators": ", ".join(f"{k}: {v}" for k, v in ev.contributing_features.items()) or "Routine traffic",
+                            "Supporting Events": len(ev.triggering_event_ids),
+                        })
+                    st.dataframe(pd.DataFrame(ml_records), use_container_width=True)
+            except Exception as e:
+                st.warning(f"ML evaluation unavailable: {e}")
     else:
         st.info("Load logs in Tab 1 to run the detection engine.")
 

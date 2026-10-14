@@ -25,6 +25,11 @@ class Settings:
     SAMPLES_DIR: Path = BASE_DIR / "data" / "samples"
     KNOWLEDGE_DIR: Path = BASE_DIR / "data" / "knowledge"
     VECTOR_CACHE_DIR: Path = BASE_DIR / "data" / "cache"
+    ML_MODEL_DIR: Path = BASE_DIR / "data" / "cache" / "ml_models"
+
+    # ML Settings
+    ML_ANOMALY_CONTAMINATION: float = float(os.getenv("ML_ANOMALY_CONTAMINATION", "0.1"))
+    ML_ANOMALY_SCORE_THRESHOLD: float = float(os.getenv("ML_ANOMALY_SCORE_THRESHOLD", "0.60"))
 
     # Embedding Settings
     EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")

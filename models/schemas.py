@@ -110,6 +110,17 @@ class ThreatIntelResult(BaseModel):
     retrieval_timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     error_message: Optional[str] = Field(None, description="Error details if lookup failed")
 
+class MLAnomalyResult(BaseModel):
+    """Structured result from machine learning anomaly detection or attack classification."""
+    entity: str = Field(..., description="Target entity evaluated (e.g., source IP, username, or session ID)")
+    is_anomaly: bool = Field(..., description="True if IsolationForest or model flags the behavior as anomalous")
+    anomaly_score: float = Field(..., description="Continuous anomaly score (0.0=normal, 1.0=extreme anomaly)")
+    predicted_class: str = Field(default="normal", description="Predicted classification (e.g., 'normal', 'brute_force', 'compromise')")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence of the predicted class")
+    algorithm: str = Field(default="IsolationForest", description="Algorithm used ('IsolationForest', 'RandomForest')")
+    contributing_features: Dict[str, float] = Field(default_factory=dict, description="Key features contributing to the anomaly score")
+    triggering_event_ids: List[str] = Field(default_factory=list, description="IDs of events associated with this entity/session")
+
 
 class InvestigationReport(BaseModel):
     """Evidence-grounded structured incident report validated by Pydantic."""

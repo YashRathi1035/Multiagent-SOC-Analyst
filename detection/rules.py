@@ -29,7 +29,7 @@ class DetectionEngine:
         self.failed_then_success_window = timedelta(minutes=failed_then_success_window_minutes)
         self.user_enumeration_threshold = user_enumeration_threshold
 
-    def run_all_rules(self, events: List[LogEvent]) -> List[DetectionAlert]:
+    def run_all_rules(self, events: List[LogEvent], include_ml: bool = False) -> List[DetectionAlert]:
         """Execute all configured detection rules against normalized events."""
         alerts: List[DetectionAlert] = []
 
@@ -43,7 +43,21 @@ class DetectionEngine:
         alerts.extend(self._detect_failed_then_success(sorted_events))
         alerts.extend(self._detect_user_enumeration(sorted_events))
 
+        if include_ml:
+            alerts.extend(self.run_ml_detection(sorted_events))
+
         return alerts
+
+    def run_ml_detection(self, events: List[LogEvent]) -> List[DetectionAlert]:
+        """Execute machine learning anomaly detection and attack classification."""
+        try:
+            from ml.detector import MLDetector
+            detector = MLDetector()
+            return detector.detect_alerts(events)
+        except Exception as e:
+            import logging
+            logging.getLogger("detection_engine").warning("ML detection error: %s", e)
+            return []
 
     def _detect_brute_force(self, events: List[LogEvent]) -> List[DetectionAlert]:
         """Detect repeated failed authentication attempts from the same source IP."""
