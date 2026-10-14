@@ -1,8 +1,8 @@
-"""Investigation report generator with RAG cybersecurity knowledge grounding.
+"""Investigation report generator with RAG and Threat Intelligence enrichment.
 
-Coordinates single-alert investigation with LLM, retrieves relevant MITRE ATT&CK
-and incident response guidance, validates structured outputs, cross-verifies cited
-evidence event IDs against actual log records, and provides markdown and JSON exports.
+Coordinates single-alert investigation with LLM, retrieves relevant MITRE ATT&CK guidance,
+enriches indicators with threat intelligence, validates structured outputs, cross-verifies
+cited evidence event IDs against actual log records, and provides markdown and JSON exports.
 """
 
 import json
@@ -11,11 +11,13 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from agents.llm_client import BaseLLMClient, get_llm_client
+from agents.threat_intel_agent import ThreatIntelAgent
 from models.schemas import (
     DetectionAlert,
     InvestigationReport,
     LogEvent,
     ReviewStatus,
+    ThreatIntelResult,
 )
 from rag.retrieve import RAGRetriever, RetrievedChunk
 
@@ -23,15 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 class InvestigationGenerator:
-    """Investigates detection alerts and produces verified forensic reports with RAG."""
+    """Investigates detection alerts and produces verified forensic reports with RAG & Threat Intel."""
 
     def __init__(
         self,
         llm_client: Optional[BaseLLMClient] = None,
         retriever: Optional[RAGRetriever] = None,
+        threat_intel_agent: Optional[ThreatIntelAgent] = None,
     ):
         self.llm_client = llm_client or get_llm_client()
         self.retriever = retriever or RAGRetriever()
+        self.threat_intel_agent = threat_intel_agent or ThreatIntelAgent()
 
     def investigate_alert(
         self,
@@ -39,7 +43,7 @@ class InvestigationGenerator:
         events: List[LogEvent],
         case_id: str = None,
     ) -> InvestigationReport:
-        """Run an evidence-grounded, RAG-enriched investigation on an alert.
+        """Run an evidence-grounded, RAG-enriched, and Threat-Intel corroborated investigation.
 
         Args:
             alert: The detection alert to investigate
@@ -59,6 +63,18 @@ class InvestigationGenerator:
         # If none matched by ID, fallback to matching by IP or User
         if not related_events and alert.source_ip:
             related_events = [e for e in events if e.source_ip == alert.source_ip][:20]
+
+        # Extract indicators (IP addresses)
+        candidate_ips: Set[str] = set()
+        if alert.source_ip:
+            candidate_ips.add(alert.source_ip)
+        for e in related_events:
+            if e.source_ip:
+                candidate_ips.add(e.source_ip)
+
+        # Threat Intelligence Enrichment
+        ti_analysis = self.threat_intel_agent.analyze_indicators(list(candidate_ips))
+        ti_context = self.threat_intel_agent.format_threat_intel_for_prompt(ti_analysis)
 
         # Prepare sanitized evidence records for the prompt
         evidence_lines = []
@@ -97,16 +113,21 @@ Source IP: {alert.source_ip or 'Unknown'}
 {knowledge_context}
 </retrieved_cybersecurity_knowledge>
 
+<threat_intelligence_enrichment>
+{ti_context}
+</threat_intelligence_enrichment>
+
 FORENSIC TASKS:
 1. Synthesize an executive summary of the observed activity.
 2. Formulate 2-4 OBSERVED FACTS (verifiable directly from the event IDs and logs).
-3. Formulate 1-3 INFERRED CONCLUSIONS (hypotheses regarding adversary intent).
+3. Formulate 1-3 INFERRED CONCLUSIONS (hypotheses regarding adversary intent corroborated by external reputation).
 4. Verify and list triggering event IDs that substantiate this finding.
 5. Identify all relevant Indicators of Compromise (IOCs: IPs, usernames).
 6. Map to candidate MITRE ATT&CK techniques with specific evidence explanations, guided by the retrieved cybersecurity knowledge.
-7. Provide at least two plausible ALTERNATIVE EXPLANATIONS (e.g., benign IT misconfigurations).
-8. Detail at least two INVESTIGATION LIMITATIONS (data gaps, missing telemetry).
-9. Prescribe prioritized, actionable RECOMMENDED ACTIONS based on the retrieved incident response guidance.
+7. Corroborate whether external threat intelligence supports the hypothesis of malicious intent.
+8. Provide at least two plausible ALTERNATIVE EXPLANATIONS (e.g., benign IT misconfigurations).
+9. Detail at least two INVESTIGATION LIMITATIONS (data gaps, missing telemetry).
+10. Prescribe prioritized, actionable RECOMMENDED ACTIONS based on the retrieved incident response guidance.
 """
 
         try:
@@ -125,8 +146,9 @@ FORENSIC TASKS:
             report.case_id = case_id
             report.alert_id = alert.alert_id
 
-        # Attach retrieved knowledge metadata to report for full auditability
+        # Attach retrieved knowledge and threat intel metadata for full auditability
         report.retrieved_knowledge = [c.model_dump() for c in retrieved_chunks]
+        report.threat_intel_results = ti_analysis.get("results", [])
 
         # FORENSIC CROSS-CHECK: Verify all cited event IDs against actual dataset
         known_event_ids = {e.event_id for e in events}
@@ -150,6 +172,13 @@ def export_report_to_markdown(report: InvestigationReport) -> str:
             for m in report.mitre_techniques
         ]
     ) or "| N/A | None mapped | No conclusive technique evidence |"
+
+    ti_rows = "\n".join(
+        [
+            f"| `{t.indicator}` | `{t.indicator_type}` | {t.provider} | **{t.reputation_score:.0f}%** | {t.threat_category or 'N/A'} | {t.country_code or 'N/A'} | {t.total_reports} |"
+            for t in report.threat_intel_results
+        ]
+    ) or "| N/A | N/A | None | 0% | No indicators enriched | N/A | 0 |"
 
     knowledge_rows = "\n".join(
         [
@@ -214,12 +243,19 @@ def export_report_to_markdown(report: InvestigationReport) -> str:
 
 ---
 
-## 5. Retrieved Cybersecurity Guidance (RAG)
+## 5. External Threat Intelligence & Indicator Enrichment
+| Indicator | Type | Provider | Reputation Score | Category | Country | Reports |
+|---|---|---|---|---|---|---|
+{ti_rows}
+
+---
+
+## 6. Retrieved Cybersecurity Guidance (RAG)
 {knowledge_rows}
 
 ---
 
-## 6. Alternative Explanations & Investigation Limitations
+## 7. Alternative Explanations & Investigation Limitations
 
 ### Benign Hypotheses & Alternative Explanations
 {alternatives}
@@ -229,7 +265,7 @@ def export_report_to_markdown(report: InvestigationReport) -> str:
 
 ---
 
-## 7. Actionable Next Steps & Remediation
+## 8. Actionable Next Steps & Remediation
 {recommendations}
 """
 

@@ -90,6 +90,27 @@ class MitreTechniqueMapping(BaseModel):
     evidence: str = Field(..., description="Specific observed evidence supporting this mapping")
 
 
+class ThreatIntelResult(BaseModel):
+    """External reputation intelligence for an indicator of compromise."""
+    indicator: str = Field(..., description="IP address, domain, or hash")
+    indicator_type: str = Field(..., description="'ipv4', 'ipv6', 'domain', 'sha256'")
+    provider: str = Field(..., description="Source provider name ('MockThreatIntel', 'AbuseIPDB', 'VirusTotal')")
+    reputation_score: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Abuse confidence or malicious percentage (0-100)"
+    )
+    is_malicious: bool = Field(default=False, description="Flag indicating high likelihood of malicious reputation")
+    threat_category: Optional[str] = Field(
+        None, description="Category: 'Brute-Force', 'Botnet', 'Scanner', 'Clean', 'Private Network'"
+    )
+    total_reports: int = Field(default=0, description="Number of malicious reports logged by community")
+    last_reported_at: Optional[str] = Field(None, description="ISO timestamp of last reported attack")
+    country_code: Optional[str] = Field(None, description="Origin country code")
+    isp: Optional[str] = Field(None, description="Internet Service Provider or ASN")
+    source_url: Optional[str] = Field(None, description="Link to provider intelligence page")
+    retrieval_timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    error_message: Optional[str] = Field(None, description="Error details if lookup failed")
+
+
 class InvestigationReport(BaseModel):
     """Evidence-grounded structured incident report validated by Pydantic."""
     case_id: str = Field(..., description="Unique identifier for the investigation case")
@@ -129,6 +150,10 @@ class InvestigationReport(BaseModel):
     retrieved_knowledge: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="Retrieved cybersecurity knowledge excerpts and citations used during investigation",
+    )
+    threat_intel_results: List[ThreatIntelResult] = Field(
+        default_factory=list,
+        description="External threat intelligence enrichment records for case indicators",
     )
     alternative_explanations: List[str] = Field(
         default_factory=list,

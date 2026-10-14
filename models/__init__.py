@@ -5,6 +5,7 @@ from models.schemas import (
     ReviewStatus,
     DetectionAlert,
     MitreTechniqueMapping,
+    ThreatIntelResult,
     InvestigationReport,
     InvestigationState,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ReviewStatus",
     "DetectionAlert",
     "MitreTechniqueMapping",
+    "ThreatIntelResult",
     "InvestigationReport",
     "InvestigationState",
 ]

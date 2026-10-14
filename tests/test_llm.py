@@ -40,6 +40,12 @@ def test_ollama_client_check():
     assert isinstance(msg, str)
 
 
+from rag.embeddings import EmbeddingManager
+from rag.retrieve import RAGRetriever
+from agents.threat_intel_agent import ThreatIntelAgent
+from tools.reputation import ThreatIntelService
+
+
 def test_investigation_generator_with_mock():
     records, _ = parse_openssh_log(SYNTHETIC_BRUTE_FORCE_LOG, year=2026)
     events, _ = normalize_events(records)
@@ -48,7 +54,13 @@ def test_investigation_generator_with_mock():
     assert len(alerts) > 0
 
     mock_client = MockLLMClient()
-    generator = InvestigationGenerator(llm_client=mock_client)
+    mock_retriever = RAGRetriever(embedding_manager=EmbeddingManager(force_mock=True))
+    mock_ti = ThreatIntelAgent(service=ThreatIntelService(force_mock=True))
+    generator = InvestigationGenerator(
+        llm_client=mock_client,
+        retriever=mock_retriever,
+        threat_intel_agent=mock_ti,
+    )
     report = generator.investigate_alert(alerts[0], events, case_id="CASE-TEST-001")
 
     assert report.case_id == "CASE-TEST-001"
@@ -59,6 +71,7 @@ def test_investigation_generator_with_mock():
     md = export_report_to_markdown(report)
     assert "# Security Incident Investigation Report" in md
     assert "CASE-TEST-001" in md
+    assert "External Threat Intelligence" in md
 
     js = export_report_to_json(report)
     assert '"case_id": "CASE-TEST-001"' in js
@@ -71,7 +84,13 @@ def test_prompt_injection_safety():
     engine = DetectionEngine(brute_force_threshold=4)
     alerts = engine.run_all_rules(events)
 
-    generator = InvestigationGenerator(llm_client=MockLLMClient())
+    mock_retriever = RAGRetriever(embedding_manager=EmbeddingManager(force_mock=True))
+    mock_ti = ThreatIntelAgent(service=ThreatIntelService(force_mock=True))
+    generator = InvestigationGenerator(
+        llm_client=MockLLMClient(),
+        retriever=mock_retriever,
+        threat_intel_agent=mock_ti,
+    )
     if alerts:
         report = generator.investigate_alert(alerts[0], events)
         assert isinstance(report, InvestigationReport)

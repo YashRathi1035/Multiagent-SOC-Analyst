@@ -185,7 +185,7 @@ st.markdown(
                 {'● Ollama Online (' + settings.OLLAMA_MODEL + ')' if ollama_online else '▲ Mock LLM Mode'}
             </span>
             <div style="font-size: 0.8rem; color: #38bdf8; margin-top: 5px; font-weight: 600;">
-                Phase 2: RAG & MITRE ATT&CK Active (FAISS + all-MiniLM-L6-v2)
+                Phase 3: Threat Intelligence & RAG Active (Enrichment + FAISS)
             </div>
         </div>
     </div>
@@ -534,6 +534,27 @@ with tab3:
         else:
             st.write("No direct MITRE ATT&CK techniques mapped.")
 
+        # Threat Intelligence Indicator Enrichment
+        if rep.threat_intel_results:
+            st.markdown("### 🌐 External Threat Intelligence & Indicator Enrichment")
+            st.caption("External reputation corroborating locally observed forensic indicators:")
+            ti_data = []
+            for t in rep.threat_intel_results:
+                ti_data.append({
+                    "Indicator": t.indicator,
+                    "Type": t.indicator_type,
+                    "Provider": t.provider,
+                    "Reputation Score": f"{t.reputation_score:.0f}%",
+                    "Malicious": "🚨 YES" if t.is_malicious else "✅ NO",
+                    "Threat Category": t.threat_category or "Uncategorized",
+                    "Reports": t.total_reports,
+                    "Country": t.country_code or "N/A",
+                    "ISP": t.isp or "Unknown",
+                })
+            st.dataframe(pd.DataFrame(ti_data), use_container_width=True)
+
+        st.markdown("---")
+
         # Grounded Cybersecurity Knowledge & Citations (RAG)
         if rep.retrieved_knowledge:
             st.markdown("### 📚 Grounded Cybersecurity Knowledge & Citations (RAG)")
@@ -606,52 +627,82 @@ with tab3:
         st.info("No investigation run yet. Go to **Tab 2 (Detection Engine & Alerts)** and click **⚡ Investigate with AI** on any detected alert.")
 
 # ==========================================
-# TAB 4: Knowledge Base Search (RAG)
+# TAB 4: Knowledge Base & Threat Intel Tools
 # ==========================================
 with tab4:
-    st.subheader("Interactive MITRE ATT&CK & Incident Response Vector Search")
-    st.markdown(
-        "Directly query the indexed cybersecurity knowledge base (FAISS + sentence-transformers). "
-        "Search for attack techniques, detection heuristics, and containment playbooks."
-    )
+    st.subheader("📚 Cybersecurity Knowledge & Threat Intelligence Tools")
 
-    q_col1, q_col2, q_col3 = st.columns([3, 1, 1])
-    with q_col1:
+    t4_col1, t4_col2 = st.columns([1, 1])
+
+    with t4_col1:
+        st.markdown("#### 🔍 MITRE ATT&CK & Playbook Semantic Search")
         rag_search_query = st.text_input(
             "Semantic Query",
             value="SSH password guessing brute force",
             placeholder="e.g. password spraying, privilege escalation, SSH lateral movement...",
         )
-    with q_col2:
         source_filter_opt = st.selectbox(
             "Source Filter",
             options=["All Sources", "mitre_attack", "incident_playbook"],
         )
-    with q_col3:
-        top_k_opt = st.slider("Max Results", min_value=1, max_value=8, value=4)
+        top_k_opt = st.slider("Max Results", min_value=1, max_value=6, value=3)
 
-    if st.button("🔍 Search Knowledge Base", type="primary", use_container_width=True):
-        src_filt = None if source_filter_opt == "All Sources" else source_filter_opt
-        with st.spinner("Searching FAISS vector index..."):
-            retriever = RAGRetriever()
-            search_results = retriever.retrieve(
-                query=rag_search_query,
-                top_k=top_k_opt,
-                score_threshold=0.15,
-                source_filter=src_filt,
+        if st.button("🔍 Search Knowledge Base", type="primary", use_container_width=True):
+            src_filt = None if source_filter_opt == "All Sources" else source_filter_opt
+            with st.spinner("Searching FAISS vector index..."):
+                retriever = RAGRetriever()
+                search_results = retriever.retrieve(
+                    query=rag_search_query,
+                    top_k=top_k_opt,
+                    score_threshold=0.15,
+                    source_filter=src_filt,
+                )
+
+            if search_results:
+                st.success(f"Found {len(search_results)} relevant knowledge chunks!")
+                for idx, res in enumerate(search_results, start=1):
+                    badge_type = "MITRE ATT&CK" if res.source_type == "mitre_attack" else "NIST Playbook"
+                    with st.expander(f"#{idx} [{badge_type}] {res.title} (Score: {res.similarity_score * 100:.1f}%)", expanded=(idx == 1)):
+                        st.markdown(f"**Citation:** `{res.citation}`")
+                        if res.url:
+                            st.markdown(f"**Reference Link:** [{res.url}]({res.url})")
+                        if res.tactics:
+                            st.markdown(f"**Tactics/Category:** `{', '.join(res.tactics)}`")
+                        st.markdown(f"```text\n{res.text}\n```")
+            else:
+                st.warning("No knowledge chunks exceeded the relevance threshold for this query.")
+
+    with t4_col2:
+        st.markdown("#### 🌐 Live Threat Intelligence Indicator Lookup")
+        st.caption("Check IP reputation with private RFC1918 safety filtering (Mock / AbuseIPDB / VirusTotal):")
+        lookup_ip_input = st.text_input("Enter IP Address", value="187.141.143.180")
+
+        if st.button("🔎 Check Indicator Reputation", use_container_width=True):
+            with st.spinner(f"Querying threat intelligence for {lookup_ip_input}..."):
+                from tools.reputation import ThreatIntelService
+                service = ThreatIntelService(force_mock=use_mock)
+                ti_res = service.enrich_ip(lookup_ip_input.strip())
+
+            st.markdown(
+                f"""
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="font-size: 1.1rem; color: #38bdf8;">{ti_res.indicator}</strong>
+                    <span class="{'badge-critical' if ti_res.is_malicious else ('badge-high' if ti_res.reputation_score >= 20 else 'badge-low')}">
+                        {ti_res.reputation_score:.0f}% Abuse Score
+                    </span>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.9rem; color: #cbd5e1;">
+                    <strong>Provider:</strong> <code>{ti_res.provider}</code><br>
+                    <strong>Category:</strong> {ti_res.threat_category or 'N/A'}<br>
+                    <strong>Malicious Flag:</strong> {'🚨 YES' if ti_res.is_malicious else '✅ NO'}<br>
+                    <strong>Community Reports:</strong> {ti_res.total_reports}<br>
+                    <strong>Country:</strong> {ti_res.country_code or 'Unknown'} | <strong>ISP:</strong> {ti_res.isp or 'Unknown'}<br>
+                    <strong>Timestamp:</strong> <code>{ti_res.retrieval_timestamp}</code>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
             )
-
-        if search_results:
-            st.success(f"Found {len(search_results)} relevant knowledge chunks!")
-            for idx, res in enumerate(search_results, start=1):
-                badge_type = "MITRE ATT&CK" if res.source_type == "mitre_attack" else "NIST Playbook"
-                with st.expander(f"#{idx} [{badge_type}] {res.title} (Score: {res.similarity_score * 100:.1f}%)", expanded=(idx == 1)):
-                    st.markdown(f"**Citation:** `{res.citation}`")
-                    if res.url:
-                        st.markdown(f"**Reference Link:** [{res.url}]({res.url})")
-                    if res.tactics:
-                        st.markdown(f"**Tactics/Category:** `{', '.join(res.tactics)}`")
-                    st.markdown("---")
-                    st.markdown(f"```text\n{res.text}\n```")
-        else:
-            st.warning("No knowledge chunks exceeded the relevance threshold for this query.")
+            if ti_res.source_url:
+                st.markdown(f"[View Provider Intelligence Report]({ti_res.source_url})")
